@@ -1,21 +1,31 @@
 import 'package:flutter/material.dart';
 import 'screens/contracao_screen.dart';
 import 'screens/historico_screen.dart';
-import 'screens/analise_screen.dart';
 import 'screens/assistente_screen.dart';
-import 'screens/modo_acompanhante_screen.dart';
+import 'screens/chutes_screen.dart';
+import 'screens/sintomas_screen.dart';
+import 'screens/agenda_screen.dart';
 import 'data/contracoes_data.dart';
+import 'data/gestacao_data.dart';
 import 'services/contracoes_storage.dart';
+import 'services/gestacao_storage.dart';
 import 'theme/app_theme.dart';
+import 'widgets/editar_dum_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   listaContracoes = await ContracoesStorage.carregarContracoes();
-  runApp(const SuaContracaoApp());
+
+  final dumSalva = await GestacaoStorage.carregarDUM();
+  if (dumSalva != null) {
+    atualizarDUM(dumSalva);
+  }
+
+  runApp(const MinhaGestacaoApp());
 }
 
-class SuaContracaoApp extends StatelessWidget {
-  const SuaContracaoApp({super.key});
+class MinhaGestacaoApp extends StatelessWidget {
+  const MinhaGestacaoApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +53,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int _tabAtual = 0;
 
   @override
   void initState() {
@@ -66,9 +77,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _toggleTema() {
-    themeNotifier.value = themeNotifier.value == ThemeMode.light
-        ? ThemeMode.dark
-        : ThemeMode.light;
+    themeNotifier.value =
+        themeNotifier.value == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
   }
 
   bool get _isDark => themeNotifier.value == ThemeMode.dark;
@@ -84,7 +94,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String get intervaloMedio {
     if (listaContracoes.length < 2) return '—';
-
     final horarios = listaContracoes.map((c) {
       final partes = c.inicio.split(':');
       if (partes.length != 2) return null;
@@ -95,36 +104,30 @@ class _HomeScreenState extends State<HomeScreen> {
     }).whereType<int>().toList();
 
     if (horarios.length < 2) return '—';
-
     int soma = 0;
     for (int i = 1; i < horarios.length; i++) {
       soma += (horarios[i] - horarios[i - 1]).abs();
     }
-
     final media = soma ~/ (horarios.length - 1);
     return '${media}min';
   }
 
+  // ── Widgets auxiliares ──────────────────────────────────────────────
+
   Widget statCard({
     required String valor,
+    required String label,
     required Color bg,
     required Color valorCor,
     required Color labelCor,
-    required String label,
   }) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(14),
-        ),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
         child: Column(
           children: [
-            Text(
-              valor,
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: valorCor),
-            ),
+            Text(valor, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: valorCor)),
             const SizedBox(height: 2),
             Text(label, style: TextStyle(fontSize: 10, color: labelCor)),
           ],
@@ -164,10 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Container(
                   width: 42,
                   height: 42,
-                  decoration: BoxDecoration(
-                    color: iconBg,
-                    borderRadius: BorderRadius.circular(13),
-                  ),
+                  decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(13)),
                   child: Icon(icon, size: 20, color: iconColor),
                 ),
                 const SizedBox(width: 12),
@@ -175,37 +175,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.textPrimary(context),
-                        ),
-                      ),
+                      Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.textPrimary(context))),
                       const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        style: TextStyle(fontSize: 11, color: AppColors.textSecondary(context)),
-                      ),
+                      Text(subtitle, style: TextStyle(fontSize: 11, color: AppColors.textSecondary(context))),
                     ],
                   ),
                 ),
                 if (badge != null)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: badgeBg ?? const Color(0xFFE1F5EE),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      badge,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
-                        color: badgeColor ?? const Color(0xFF0F6E56),
-                      ),
-                    ),
+                    decoration: BoxDecoration(color: badgeBg ?? AppTheme.primaryPurple, borderRadius: BorderRadius.circular(20)),
+                    child: Text(badge, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: badgeColor ?? Colors.white)),
                   )
                 else
                   Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.textMuted(context)),
@@ -236,25 +216,16 @@ class _HomeScreenState extends State<HomeScreen> {
             Container(
               width: 46,
               height: 46,
-              decoration: BoxDecoration(
-                color: const Color.fromRGBO(255, 255, 255, 0.15),
-                borderRadius: BorderRadius.circular(14),
-              ),
+              decoration: BoxDecoration(color: const Color.fromRGBO(255, 255, 255, 0.15), borderRadius: BorderRadius.circular(14)),
               child: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
             ),
             const SizedBox(width: 14),
             const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Registrar Contração',
-                  style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
-                ),
+                Text('Registrar Contração', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
                 SizedBox(height: 2),
-                Text(
-                  'Toque para iniciar o monitoramento',
-                  style: TextStyle(color: Color.fromRGBO(255, 255, 255, 0.65), fontSize: 11),
-                ),
+                Text('Toque para iniciar o monitoramento', style: TextStyle(color: Color.fromRGBO(255, 255, 255, 0.65), fontSize: 11)),
               ],
             ),
           ],
@@ -263,23 +234,127 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget gestacaoCard(BuildContext context) {
+    final g = gestacaoAtual;
+    final bebe = g.tamanhoBebe;
+
+    return GestureDetector(
+      onTap: () => mostrarEditarDUM(context, () => setState(() {})),
+      child: Container(
+      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.statPurple(context), AppColors.statPink(context)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: '${g.semanaAtual}',
+                          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w500, color: AppColors.accentText(context)),
+                        ),
+                        TextSpan(
+                          text: 'sem',
+                          style: TextStyle(fontSize: 13, color: AppColors.accentText(context)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    '${g.diaAtual}º dia · ${g.trimestre}º trimestre',
+                    style: TextStyle(fontSize: 10, color: AppColors.accent(context)),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              Row(
+                children: [
+                  Text(bebe['emoji']!, style: const TextStyle(fontSize: 32)),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Tam. ${bebe['fruta']!.toLowerCase()}',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textPrimary(context)),
+                      ),
+                      Text('~${bebe['tamanho']}', style: TextStyle(fontSize: 9, color: AppColors.textSecondary(context))),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: g.percentualConcluido / 100,
+              minHeight: 6,
+              backgroundColor: AppColors.accent(context).withOpacity(0.15),
+              valueColor: AlwaysStoppedAnimation(AppTheme.primaryPurple),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('${g.percentualConcluido.round()}% concluído',
+                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w500, color: AppColors.accentText(context))),
+              Text('faltam ${g.semanasRestantes} semanas',
+                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w500, color: AppColors.accentText(context))),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Center(
+            child: Text(
+              'Toque para editar',
+              style: TextStyle(fontSize: 8, color: AppColors.accent(context).withOpacity(0.6)),
+            ),
+          ),
+        ],
+      ),
+      ),
+    );
+  }
+
   Widget bottomNav(BuildContext context) {
     Widget navItem({
       required IconData icon,
-      required bool active,
-      VoidCallback? onTap,
+      required int index,
     }) {
+      final active = _tabAtual == index;
       return InkWell(
         borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
+        onTap: () {
+          if (index == 0) {
+            setState(() => _tabAtual = 0);
+          } else if (index == 1) {
+            abrirTela(context, const ChutesScreen());
+          } else if (index == 2) {
+            abrirTela(context, const SintomasScreen());
+          } else if (index == 3) {
+            abrirTela(context, const AgendaScreen());
+          }
+        },
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              color: active ? const Color(0xFF534AB7) : AppColors.textSecondary(context),
-              size: 20,
-            ),
+            Icon(icon, color: active ? AppTheme.primaryPurple : AppColors.textSecondary(context), size: 20),
             const SizedBox(height: 3),
             if (active)
               const CircleAvatar(radius: 2, backgroundColor: Color(0xFF534AB7))
@@ -300,22 +375,10 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          navItem(icon: Icons.home_rounded, active: true),
-          navItem(
-            icon: Icons.access_time_rounded,
-            active: false,
-            onTap: () => abrirTela(context, const ContracaoScreen()),
-          ),
-          navItem(
-            icon: Icons.auto_graph_rounded,
-            active: false,
-            onTap: () => abrirTela(context, const AnaliseScreen()),
-          ),
-          navItem(
-            icon: Icons.chat_bubble_outline_rounded,
-            active: false,
-            onTap: () => abrirTela(context, const AssistenteScreen()),
-          ),
+          navItem(icon: Icons.home_rounded, index: 0),
+          navItem(icon: Icons.directions_walk_rounded, index: 1),
+          navItem(icon: Icons.sentiment_satisfied_alt_rounded, index: 2),
+          navItem(icon: Icons.calendar_month_rounded, index: 3),
         ],
       ),
     );
@@ -345,9 +408,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.fromLTRB(24, 48, 24, 28),
                     decoration: BoxDecoration(
                       color: AppColors.surfaceVariant(context),
-                      border: Border(
-                        bottom: BorderSide(color: AppColors.border(context), width: 0.5),
-                      ),
+                      border: Border(bottom: BorderSide(color: AppColors.border(context), width: 0.5)),
                     ),
                     child: Column(
                       children: [
@@ -355,23 +416,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                             Row(
                               children: [
-                                CircleAvatar(
-                                  radius: 5,
-                                  backgroundColor: AppTheme.pink,
-                                ),
+                                CircleAvatar(radius: 5, backgroundColor: AppTheme.pink),
                                 const SizedBox(width: 8),
-                                Text(
-                                  'Sua Contração',
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppColors.accentText(context),
-                                  ),
-                                ),
+                                Text('Minha Gestação',
+                                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.accentText(context))),
                               ],
                             ),
                             const Spacer(),
-                            // Botão de toggle tema
                             GestureDetector(
                               onTap: _toggleTema,
                               child: Container(
@@ -380,10 +431,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 decoration: BoxDecoration(
                                   color: AppColors.statPurple(context),
                                   shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: AppColors.accent(context).withOpacity(0.2),
-                                    width: 0.5,
-                                  ),
+                                  border: Border.all(color: AppColors.accent(context).withOpacity(0.2), width: 0.5),
                                 ),
                                 child: Icon(
                                   _isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
@@ -397,25 +445,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 24),
                         Align(
                           alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Olá, mamãe 👋',
-                            style: TextStyle(
-                              color: AppColors.textPrimary(context),
-                              fontSize: 24,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
+                          child: Text('Olá, mamãe 👋',
+                              style: TextStyle(color: AppColors.textPrimary(context), fontSize: 24, fontWeight: FontWeight.w500)),
                         ),
                         const SizedBox(height: 4),
                         Align(
                           alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Seu apoio inteligente para entender contrações',
-                            style: TextStyle(
-                              color: AppColors.textSecondary(context),
-                              fontSize: 13,
-                            ),
-                          ),
+                          child: Text('Seu apoio inteligente para entender contrações',
+                              style: TextStyle(color: AppColors.textSecondary(context), fontSize: 13)),
                         ),
                         const SizedBox(height: 20),
                         Row(
@@ -454,30 +491,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Text(
-                            'AÇÃO PRINCIPAL',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 0.8,
-                              color: AppColors.textMuted(context),
-                            ),
-                          ),
+                          child: Text('AÇÃO PRINCIPAL',
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, letterSpacing: 0.8, color: AppColors.textMuted(context))),
                         ),
                         const SizedBox(height: 10),
                         bigActionButton(context),
                         const SizedBox(height: 14),
+
+                        gestacaoCard(context),
+
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Text(
-                            'EXPLORAR',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 0.8,
-                              color: AppColors.textMuted(context),
-                            ),
-                          ),
+                          child: Text('EXPLORAR',
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, letterSpacing: 0.8, color: AppColors.textMuted(context))),
                         ),
                         const SizedBox(height: 10),
                         menuCard(
@@ -491,15 +517,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         menuCard(
                           context: context,
-                          icon: Icons.auto_graph_rounded,
-                          title: 'Análise Inteligente',
-                          subtitle: 'Padrões e insights com IA',
-                          screen: const AnaliseScreen(),
-                          iconBg: AppColors.statPink(context),
-                          iconColor: const Color(0xFF993556),
-                        ),
-                        menuCard(
-                          context: context,
                           icon: Icons.chat_bubble_outline_rounded,
                           title: 'Assistente de Dúvidas',
                           subtitle: 'Tire dúvidas com apoio de IA',
@@ -509,15 +526,33 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         menuCard(
                           context: context,
-                          icon: Icons.group_outlined,
-                          title: 'Modo Acompanhante',
-                          subtitle: 'Compartilhe com quem você ama',
-                          screen: const ModoAcompanhanteScreen(),
+                          icon: Icons.directions_walk_rounded,
+                          title: 'Contador de Chutes',
+                          subtitle: 'Monitore os movimentos do bebê',
+                          screen: const ChutesScreen(),
+                          iconBg: AppColors.statPurple(context),
+                          iconColor: const Color(0xFF534AB7),
+                          badge: 'NOVO',
+                        ),
+                        menuCard(
+                          context: context,
+                          icon: Icons.sentiment_satisfied_alt_rounded,
+                          title: 'Diário de Sintomas',
+                          subtitle: 'Humor, sintomas e peso',
+                          screen: const SintomasScreen(),
+                          iconBg: AppColors.statPink(context),
+                          iconColor: const Color(0xFF993556),
+                          badge: 'NOVO',
+                        ),
+                        menuCard(
+                          context: context,
+                          icon: Icons.calendar_month_rounded,
+                          title: 'Agenda de Consultas',
+                          subtitle: 'Próximas consultas e exames',
+                          screen: const AgendaScreen(),
                           iconBg: AppColors.statGreen(context),
                           iconColor: const Color(0xFF0F6E56),
                           badge: 'NOVO',
-                          badgeBg: const Color(0xFFE1F5EE),
-                          badgeColor: const Color(0xFF0F6E56),
                         ),
                       ],
                     ),
